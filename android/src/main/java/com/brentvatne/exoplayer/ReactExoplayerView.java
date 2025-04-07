@@ -856,11 +856,49 @@ public class ReactExoplayerView extends FrameLayout implements
             this.bandwidthMeter = config.getBandwidthMeter();
         }
 
-        DefaultRenderersFactory renderersFactory =
-                new DefaultRenderersFactory(getContext())
-                        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
-                        .setEnableDecoderFallback(true)
-                        .forceEnableMediaCodecAsynchronousQueueing();
+        RenderersFactory renderersFactory = new DefaultRenderersFactory(getContext()) {
+            @Override
+            protected void buildVideoRenderers(
+                    Context context,
+                    @Nullable DrmSessionManager drmSessionManager,
+                    MediaCodecSelector mediaCodecSelector,
+                    boolean enableDecoderFallback,
+                    Handler eventHandler,
+                    VideoRendererEventListener eventListener,
+                    long allowedVideoJoiningTimeMs,
+                    ArrayList<Renderer> out) {
+        
+                // Use software-only selector (skips hardware decoders)
+                super.buildVideoRenderers(
+                        context,
+                        drmSessionManager,
+                        new MediaCodecSelector() {
+                            @Override
+                            public List<MediaCodecInfo> getDecoderInfos(String mimeType, boolean requiresSecureDecoder, boolean requiresTunnelingDecoder)
+                                    throws DecoderQueryException {
+                                // Get all available decoders
+                                List<MediaCodecInfo> all = MediaCodecUtil.getDecoderInfosSortedByFormatSupport(
+                                        new Format.Builder().setSampleMimeType(mimeType).build(),
+                                        /* secureDecodersExplicit= */ requiresSecureDecoder,
+                                        /* tunnelingDecodersExplicit= */ requiresTunnelingDecoder,
+                                        /* softwareOnly= */ true  // <-- software only!
+                                );
+                                return all;
+                            }
+        
+                            @Override
+                            public MediaCodecInfo getPassthroughDecoderInfo() {
+                                return null;
+                            }
+                        },
+                        enableDecoderFallback,
+                        eventHandler,
+                        eventListener,
+                        allowedVideoJoiningTimeMs,
+                        out);
+            }
+        };
+
 
         DefaultMediaSourceFactory mediaSourceFactory = new DefaultMediaSourceFactory(mediaDataSourceFactory);
         if (useCache && !disableCache) {
